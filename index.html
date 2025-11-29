@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lista De Deseos</title>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: 'Roboto', sans-serif; background: linear-gradient(to bottom, #001f3f, #003366); color: #fff; min-height:100vh;}
+h1 { font-family: 'Great Vibes', cursive; font-size: 4em; color: #ffd700; text-shadow: 2px 2px 10px #ff0000; text-align:center; margin:20px 0; }
+.container { max-width: 700px; margin: 20px auto; padding: 20px; background: rgba(0,0,0,0.5); border-radius: 20px; box-shadow: 0 0 20px #ff0000, 0 0 30px #00ff00 inset; }
+input, textarea, select, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 10px; border: 2px solid #ffd700; font-size: 16px; outline: none; }
+button { background: #ff6961; color: #fff; font-weight: bold; cursor: pointer; transition: transform 0.2s, background 0.3s; }
+button:hover { background: #ff0000; transform: scale(1.05); }
+ul { list-style: none; padding: 0; margin-top: 10px; }
+.wish-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.2); border-radius: 15px; padding: 10px; margin: 8px 0; }
+.wish-item.taken { text-decoration: line-through; color: #aaa; background: rgba(0,0,0,0.3); }
+.wish-content { flex:1; display:flex; align-items:center; }
+.wish-content img { max-width: 80px; border-radius: 10px; margin-left:10px; }
+.wish-content h3 { margin:0; font-size:1.2em; }
+.wish-content p { margin: 3px 0; }
+.take-btn { margin-left: 10px; padding: 6px 12px; border-radius: 8px; border:none; cursor:pointer; }
+.take-btn.taken { background: gray; cursor: default; }
+.confetti { position: fixed; width: 10px; height: 10px; top:0; animation: fall 3s linear forwards; z-index:9999; border-radius:50%; pointer-events:none; }
+@keyframes fall { to { transform: translateY(100vh) rotate(360deg); opacity:0; } }
+.snowflake { position: fixed; top: -50px; color: #fff; font-size: 1em; user-select: none; pointer-events: none; animation-name: snow; animation-iteration-count: infinite; animation-timing-function: linear; }
+@keyframes snow { 0% { transform: translateY(0) rotate(0deg); opacity:1;} 100% { transform: translateY(100vh) rotate(360deg); opacity:0;} }
+</style>
+</head>
+<body>
+
+<h1>🎄 Lista De Deseos 🎁</h1>
+
+<!-- Inicio -->
+<div class="container" id="startSection">
+  <h2>Elige una opción</h2>
+  <button onclick="createCode()">Crear Código</button>
+  <button onclick="showJoinCode()">Ingresar Código</button>
+  <input type="text" id="manualCode" placeholder="Ingresa código si lo tienes" style="display:none;">
+  <button id="manualConfirm" style="display:none;" onclick="confirmManualCode()">Continuar</button>
+</div>
+
+<!-- Nombre -->
+<div class="container" id="nameSection" style="display:none;">
+  <h2>Ingresa tu nombre</h2>
+  <input type="text" id="username" placeholder="Tu nombre">
+  <button onclick="enterName()">Continuar</button>
+</div>
+
+<!-- Lista de deseos -->
+<div class="container" id="wishlistSection" style="display:none;">
+  <h2>Tu lista de deseos</h2>
+  <input type="text" id="giftName" placeholder="Nombre del deseo">
+  <textarea id="giftDescription" placeholder="Descripción"></textarea>
+  <input type="number" id="giftPrice" placeholder="Precio aproximado">
+  <input type="file" id="giftPhoto" accept="image/*">
+  <button onclick="addGift()">Agregar deseo</button>
+  <ul id="myWishlist"></ul>
+</div>
+
+<!-- Seleccionar deseos de otros -->
+<div class="container" id="selectSection" style="display:none;">
+  <h2>Selecciona deseos de otros</h2>
+  <select id="otherUserList" onchange="loadOtherWishlist()">
+    <option value="">Selecciona un participante</option>
+  </select>
+  <ul id="otherWishlist"></ul>
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDrnFIm58PIEHfIw8UeadL-Mfe4753u9R8",
+  authDomain: "amigo-secreto-lista-de-deseos.firebaseapp.com",
+  projectId: "amigo-secreto-lista-de-deseos",
+  storageBucket: "amigo-secreto-lista-de-deseos.firebasestorage.app",
+  messagingSenderId: "241755952106",
+  appId: "1:241755952106:web:a15f9a5db3e05f81381893",
+  measurementId: "G-FY31FG62T6"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+let username='', groupCode='';
+
+// Crear código
+function createCode(){
+  groupCode=Math.random().toString(36).substring(2,6).toUpperCase();
+  alert('Tu código es: '+groupCode);
+  document.getElementById('startSection').style.display='none';
+  document.getElementById('nameSection').style.display='block';
+}
+
+// Mostrar ingreso de código
+function showJoinCode(){
+  document.getElementById('manualCode').style.display='block';
+  document.getElementById('manualConfirm').style.display='block';
+}
+
+function confirmManualCode(){
+  const code=document.getElementById('manualCode').value.trim().toUpperCase();
+  if(!code) return alert('Ingresa un código');
+  groupCode=code;
+  document.getElementById('startSection').style.display='none';
+  document.getElementById('nameSection').style.display='block';
+}
+
+// Ingresar nombre
+function enterName(){
+  username=document.getElementById('username').value.trim();
+  if(!username) return alert('Ingresa tu nombre');
+  document.getElementById('nameSection').style.display='none';
+  document.getElementById('wishlistSection').style.display='block';
+  document.getElementById('selectSection').style.display='block';
+  listenGroup();
+}
+
+// Agregar deseo
+async function addGift(){
+  const name=document.getElementById('giftName').value.trim();
+  if(!name) return;
+  const description=document.getElementById('giftDescription').value.trim();
+  const price=document.getElementById('giftPrice').value.trim();
+  const file=document.getElementById('giftPhoto').files[0];
+  let photoURL='';
+  if(file){
+    const ref=storage.ref(`giftPhotos/${Date.now()}_${file.name}`);
+    await ref.put(file);
+    photoURL=await ref.getDownloadURL();
+  }
+  const gift={name,description,price,photoURL,taken:false};
+  const userRef=db.collection('groups').doc(groupCode).collection('users').doc(username);
+  await userRef.set({gifts: firebase.firestore.FieldValue.arrayUnion(gift)},{merge:true});
+  document.getElementById('giftName').value='';
+  document.getElementById('giftDescription').value='';
+  document.getElementById('giftPrice').value='';
+  document.getElementById('giftPhoto').value='';
+}
+
+// Escuchar cambios en el grupo
+function listenGroup(){
+  db.collection('groups').doc(groupCode).collection('users')
+    .onSnapshot(snapshot=>{
+      const data={};
+      snapshot.forEach(doc=>data[doc.id]=doc.data().gifts||[]);
+      updateUI(data);
+    });
+}
+
+// Actualizar UI
+function updateUI(data){
+  const myList=document.getElementById('myWishlist');
+  myList.innerHTML='';
+  if(data[username]) data[username].forEach(g=>{
+    const li=document.createElement('li');
+    li.className=g.taken?'wish-item taken':'wish-item';
+    li.innerHTML=`<div class='wish-content'><h3>${g.name}</h3><p>${g.description||''}</p><p>$${g.price||''}</p>${g.photoURL?`<img src='${g.photoURL}'>`:''}</div>`;
+    myList.appendChild(li);
+  });
+
+  const select=document.getElementById('otherUserList');
+  select.innerHTML='<option value="">Selecciona un participante</option>';
+  Object.keys(data).forEach(user=>{
+    if(user!==username){
+      const option=document.createElement('option');
+      option.value=user;
+      option.textContent=user;
+      select.appendChild(option);
+    }
+  });
+  loadOtherWishlist();
+}
+
+// Cargar deseos de otros
+function loadOtherWishlist(){
+  const otherUser=document.getElementById('otherUserList').value;
+  const ul=document.getElementById('otherWishlist');
+  ul.innerHTML='';
+  if(!otherUser) return;
+  db.collection('groups').doc(groupCode).collection('users').doc(otherUser).get().then(doc=>{
+    const gifts=doc.data()?.gifts||[];
+    gifts.forEach((g,index)=>{
+      const li=document.createElement('li');
+      li.className=g.taken?'wish-item taken':'wish-item';
+      li.innerHTML=`<div class='wish-content'><h3>${g.name}</h3><p>${g.description||''}</p><p>$${g.price||''}</p>${g.photoURL?`<img src='${g.photoURL}'>`:''}</div>`;
+      const btn=document.createElement('button');
+      if(!g.taken){
+        btn.textContent='Lo tomo yo';
+        btn.className='take-btn';
+        btn.onclick=()=>selectGift(otherUser,index);
+      } else {
+        btn.textContent='Tomado';
+        btn.className='take-btn taken';
+      }
+      li.appendChild(btn);
+      ul.appendChild(li);
+    });
+  });
+}
+
+// Seleccionar regalo
+function selectGift(user,index){
+  const ref=db.collection('groups').doc(groupCode).collection('users').doc(user);
+  ref.get().then(doc=>{
+    const gifts=doc.data()?.gifts||[];
+    if(gifts[index].taken) return;
+    gifts[index].taken=true;
+    ref.set({gifts},{merge:true});
+    createConfetti();
+  });
+}
+
+// Confeti
+function createConfetti(){
+  for(let i=0;i<30;i++){
+    const c=document.createElement('div');
+    c.className='confetti';
+    c.style.left=Math.random()*window.innerWidth+'px';
+    c.style.backgroundColor=`hsl(${Math.random()*360},100%,50%)`;
+    c.style.width=c.style.height=Math.random()*8+4+'px';
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),3000);
+  }
+}
+
+// Nieve navideña
+for(let i=0;i<50;i++){
+  const s=document.createElement('div');
+  s.className='snowflake';
+  s.style.left=Math.random()*100+'%';
+  s.style.fontSize=Math.random()*24+12+'px';
+  s.style.animationDuration=3+Math.random()*5+'s';
+  s.style.opacity=Math.random();
+  s.textContent='❄';
+  document.body.appendChild(s);
+}
+</script>
+</body>
+</html>
